@@ -202,5 +202,5 @@ if __name__ == '__main__':
     # Classification accuracy: 0.935960591133
     print 'Classification accuracy:', testClassification(noisyData, tree)
 
-    print classify(tree, ['y' for _ in range(featureNumber)]) # R
-    print classify(tree, ['n' for _ in range(featureNumber)]) # D
+    print classify(tree, ['y' for _ in range(featureNumber)])  # R
+    print classify(tree, ['n' for _ in range(featureNumber)])  # D
