@@ -1,6 +1,11 @@
 #! /usr/bin/env python
 # coding: utf-8
 
+"""
+https://github.com/j2kun/decision-trees/blob/master/decision-tree.py
+http://jeremykun.com/2012/10/08/decision-trees-and-political-party-classification/
+"""
+
 import math
 
 
@@ -13,8 +18,25 @@ class Tree(object):
         self.parent = parent
         self.children = []
         self.label = None
+        self.classCounts = None
         self.splitFeature = None
         self.splitFeatureValue = None
+
+
+def printDecisionTree(root, indent=''):
+    """
+    :type root: Tree
+    """
+    if len(root.children) == 0:
+        print '%s%s, %s %s' % (indent, root.splitFeatureValue, root.label, root.classCounts)
+    else:
+        if indent == '':
+            print '%s%s' % (indent, root.splitFeature)
+        else:
+            print '%s%s, %s' % (indent, root.splitFeatureValue, root.splitFeature)
+
+        for child in root.children:
+            printDecisionTree(child, indent + '|-- ')
 
 
 def dataToDistribution(data):
@@ -45,10 +67,15 @@ def homogeneous(data):
     return len(set([label for (label, _) in data])) <= 1
 
 
-def majorityVote(data):
+def majorityVote(data, node):
+    """
+    :type node: Tree
+    :rtype: Tree
+    """
     labels = [label for (label, point) in data]
-    choice = max(set(labels), key=labels.count)
-    return choice
+    node.label = max(set(labels), key=labels.count)
+    node.classCounts = dict([(label, labels.count(label)) for label in set(labels)])
+    return node
 
 
 def buildDecisionTree(data, root, remainingFeatures):
@@ -58,17 +85,16 @@ def buildDecisionTree(data, root, remainingFeatures):
     """
     if homogeneous(data):
         root.label = data[0][0]
+        root.classCounts = {root.label: len(data)}
         return root
 
     if len(remainingFeatures) == 0:
-        root.label = majorityVote(data)
-        return root
+        return majorityVote(data, root)
 
     remainingGains = [gain(data, aFeature) for aFeature in remainingFeatures]
     bestFeatureIdx, bestFeature = max(enumerate(remainingFeatures), key=lambda d: remainingGains[d[0]])
     if remainingGains[bestFeatureIdx] == 0:
-        root.label = majorityVote(data)
-        return root
+        return majorityVote(data, root)
 
     root.splitFeature = bestFeature
 
@@ -100,27 +126,59 @@ def classify(tree, point):
         raise Exception("Classify is not able to handle noisy data. Use classify2 instead.")
 
 
-def testClassification(data, tree):
+def dictionarySum(*dicts):
+    """
+    :type dicts: list[dict]
+    :return:
+    """
+    sumDict = {}
+    for aDict in dicts:
+        for key, val in aDict.iteritems():
+            if key in sumDict:
+                sumDict[key] += val
+            else:
+                sumDict[key] = val
+    return sumDict
+
+
+def classifyNoisy(tree, point):
+    """
+    :type tree: Tree
+    :type point: list
+    """
+    if len(tree.children) == 0:
+        return tree.classCounts
+    elif point[tree.splitFeature] == '?':
+        dicts = [classifyNoisy(child, point) for child in tree.children]
+        return dictionarySum(*dicts)
+    else:
+        for child in tree.children:
+            if child.splitFeatureValue == point[tree.splitFeature]:
+                return classifyNoisy(child, point)
+        raise Exception("Can not been happened")
+
+
+def classify2(tree, point):
+    counts = classifyNoisy(tree, point)
+    if len(counts) == 1:
+        return counts.keys()[0]
+    else:
+        return max(counts.keys(), key=lambda k: counts[k])
+
+
+def testClassification(data, tree, classifier=classify2):
     actualLabels = [label for label, _ in data]
-    predictedLabels = [classify(tree, point) for _, point in data]
+    predictedLabels = [classifier(tree, point) for _, point in data]
     correctLabels = [a == b for a, b in zip(actualLabels, predictedLabels)]
     return float(sum(correctLabels)) / len(actualLabels)
 
 
-def printDecisionTree(root, indent=''):
-    """
-    :type root: Tree
-    """
-    if len(root.children) == 0:
-        print '%s%s, %s' % (indent, root.splitFeatureValue, root.label)
-    else:
-        if indent == '':
-            print '%s%s' % (indent, root.splitFeature)
-        else:
-            print '%s%s, %s' % (indent, root.splitFeatureValue, root.splitFeature)
+def testTreeSize(noisyData, cleanData):
+    import random
 
-        for child in root.children:
-            printDecisionTree(child, indent + '|-- ')
+    for i in range(1, len(cleanData)):
+        tree = decisionTree(random.sample(cleanData, i))
+        print i, str(testClassification(noisyData, tree))
 
 
 if __name__ == '__main__':
@@ -130,11 +188,19 @@ if __name__ == '__main__':
 
     cleanData = [x for x in data if '?' not in x[1]]
     noisyData = [x for x in data if '?' in x[1]]
+    featureNumber = len(data[0][1])
 
     print 'Train data:', len(cleanData)
     print 'Test data:', len(noisyData)
-    print 'Feature numbers:', len(cleanData[0][1])
+    print 'Feature numbers:', featureNumber
+
+    testTreeSize(noisyData, cleanData)
 
     tree = decisionTree(cleanData)
     printDecisionTree(tree)
+
+    # Classification accuracy: 0.935960591133
     print 'Classification accuracy:', testClassification(noisyData, tree)
+
+    print classify(tree, ['y' for _ in range(featureNumber)]) # R
+    print classify(tree, ['n' for _ in range(featureNumber)]) # D
