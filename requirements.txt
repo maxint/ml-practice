@@ -1,9 +1,6 @@
 ipython
 matplotlib
 numpy
-nose
 pyzmq
 tornado
-jsonpointer
 jsonschema
-mistune
